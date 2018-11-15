@@ -1,0 +1,7 @@
+apiVersion: scalog.io/v1alpha1
+kind: ScalogService
+metadata:
+  name: example-scalogservice
+spec:
+  # Add fields here
+  size: 3
