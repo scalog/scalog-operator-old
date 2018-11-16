@@ -4,19 +4,57 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-// EDIT THIS FILE!  THIS IS SCAFFOLDING FOR YOU TO OWN!
-// NOTE: json tags are required.  Any new fields you add must have json tags for the fields to be serialized.
+// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+
+type ClusterPhase string
+
+const (
+	ClusterPhaseNone     ClusterPhase = ""
+	ClusterPhaseCreating              = "Creating"
+	ClusterPhaseRunning               = "Running"
+	ClusterPhaseFailed                = "Failed"
+)
 
 // ScalogServiceSpec defines the desired state of ScalogService
 type ScalogServiceSpec struct {
-	// INSERT ADDITIONAL SPEC FIELDS - desired state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	// NumShards denotes the number of shards of the log (data layer).
+	NumShards int `json:"numShards"`
+	// NumDataReplica denotes the number of replicas in each shard (data layer).
+	NumDataReplica int `json:"numDataReplica"`
+	// NumMetadataReplica denotes the number of replicas in the ordering layer (Paxos/Raft/...).
+	NumMetadataReplica int `json:"numMetadataReplica"`
+	// Repository is the name of the repository that hosts scalog containder images.
+	//
+	// By default, it is `hub.docker.com/scalog/scalog`.
+	Repository string `json:"repository,omitempty"`
+	// Version is the expected version of the scalog cluster.
+	// The scalog-operator will eventually make the scalog cluster version equal to the expected version.
+	//
+	// If version is not set, default is "0.0.1".
+	Version string `json:"version,omitempty"`
+	// Paused is to pause the control of the operator for the scalog cluster.
+	Paused bool `json:"paused,omitempty"`
+	// scalog cluster TLS configuration
+	TLS *TLSPolicy `json:"TLS,omitempty"`
 }
 
 // ScalogServiceStatus defines the observed state of ScalogService
 type ScalogServiceStatus struct {
-	// INSERT ADDITIONAL STATUS FIELD - define observed state of cluster
-	// Important: Run "operator-sdk generate k8s" to regenerate code after modifying this file
+	// Phase is the cluster running phase.
+	Phase ClusterPhase `json:"phase"`
+	// Paused indicates the operator pauses the control of the cluster.
+	Paused bool `json:"paused,omitempty"`
+	// NumShards denotes the current number of shards of the log (data layer).
+	NumShards int `json:"numShards"`
+	// NumDataReplica denotes the current number of replicas in each shard (data layer).
+	// It should not be modified at runtime.
+	NumDataReplica int `json:"numDataReplica"`
+	// NumMetadataReplica denotes the current number of replicas in the ordering layer (Paxos/Raft/...).
+	NumMetadataReplica int `json:"numMetadataReplica"`
+	// ClientPort is the port for scalog client to access.
+	ClientPort int `json:"clientPort,omitempty"`
+	// ServiceName is the service for accessing scalog nodes.
+	ServiceName string `json:"serviceName,omitempty"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
