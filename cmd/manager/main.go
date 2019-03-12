@@ -24,7 +24,6 @@ func printVersion() {
 }
 
 func main() {
-	printVersion()
 	flag.Parse()
 
 	// The logger instantiated here can be changed to any logger
@@ -33,6 +32,8 @@ func main() {
 	// uniform and structured logs.
 	logf.SetLogger(logf.ZapLogger(false))
 	log := logf.Log.WithName("cmd")
+
+	printVersion()
 
 	namespace, err := k8sutil.GetWatchNamespace()
 	if err != nil {

@@ -2,6 +2,10 @@ apiVersion: scalog.io/v1alpha1
 kind: ScalogService
 metadata:
   name: example-scalogservice
+  namespace: scalog
 spec:
   # Add fields here
-  size: 3
+  numShards: 1
+  numDataReplica: 2
+  numMetadataReplica: 1
+  

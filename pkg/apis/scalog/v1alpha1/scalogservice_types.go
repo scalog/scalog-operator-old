@@ -55,6 +55,8 @@ type ScalogServiceStatus struct {
 	ClientPort int `json:"clientPort,omitempty"`
 	// ServiceName is the service for accessing scalog nodes.
 	ServiceName string `json:"serviceName,omitempty"`
+	// LatestShardID is the last value used to denote a new data shard
+	LatestShardID int `json:"latestShardID"`
 }
 
 // +k8s:deepcopy-gen:interfaces=k8s.io/apimachinery/pkg/runtime.Object
