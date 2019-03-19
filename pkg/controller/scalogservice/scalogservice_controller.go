@@ -120,8 +120,23 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 		reqLogger.Info("Something went wrong with reading service account")
 	}
 
+	dataService := corev1.Service{}
+	err = r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-data-headless-service"}, &dataService)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			reqLogger.Info("Data Service not found. Creating...")
+			service := newDataService()
+			if err := r.client.Create(context.Background(), service); err != nil {
+				reqLogger.Info("Something went wrong while creating the data service")
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{Requeue: true}, nil
+		}
+		reqLogger.Info("Something went wrong with reading data service")
+	}
+
 	// Reconcile the number of data shards
-	existingDataShards := &corev1.ServiceList{}
+	existingDataShards := &appsv1.StatefulSetList{}
 	dataShardSelector := client.ListOptions{}
 	dataShardSelector.SetLabelSelector(fmt.Sprintf("app=%s", "scalog-data"))
 	err = r.client.List(context.TODO(), &dataShardSelector, existingDataShards)
@@ -139,13 +154,6 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 				return reconcile.Result{}, err
 			}
 
-			// Since we have now updated the shardID, we can try creating a new service
-			service := newDataService(instance.Status.LatestShardID)
-			if err := r.client.Create(context.TODO(), service); err != nil {
-				reqLogger.Error(err, fmt.Sprintf("Failed to create headless service for shard %d", instance.Status.LatestShardID))
-				return reconcile.Result{}, err
-			}
-
 			// With the service now properly created, we can attempt to create a statefulset to live under that service
 			replicas := newDataStatefulSet(strconv.Itoa(instance.Status.LatestShardID))
 			if err := r.client.Create(context.TODO(), replicas); err != nil {
@@ -153,27 +161,8 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 				return reconcile.Result{}, err
 			}
 		} else { // We have too many shards
+			// TODO: Randomly finalize one and then kill
 			reqLogger.Info(fmt.Sprintf("Too many shards. Current: %d. Desired: %d", currSize, instance.Spec.NumShards))
-		}
-	}
-
-	// We want to ensure that each service has a statefulset running within
-	for _, shard := range existingDataShards.Items {
-		shardName := shard.Spec.ExternalName
-		id := getIDFromShardName(shardName)
-		shardSet := appsv1.StatefulSet{}
-		err := r.client.Get(context.TODO(), types.NamespacedName{Namespace: "scalog", Name: "scalog-data-shard-" + id}, &shardSet)
-		if err != nil {
-			// The shard replicas that we are searching for doesn't yet exist. Let's create one.
-			if errors.IsNotFound(err) {
-				replicas := newDataStatefulSet(id)
-				if err := r.client.Create(context.TODO(), replicas); err != nil {
-					reqLogger.Error(err, fmt.Sprintf("Failed to create statefulset for shard %s", id))
-					return reconcile.Result{}, err
-				}
-			} else {
-				reqLogger.Error(err, "Problem when fetching shard replicas")
-			}
 		}
 	}
 
@@ -187,16 +176,16 @@ func getIDFromShardName(podName string) string {
 }
 
 // newDataService launches a new service and controller for a data shard with the specified ordinal ID
-func newDataService(shardID int) *corev1.Service {
+func newDataService() *corev1.Service {
 	labels := map[string]string{
-		"name": "scalog-data-headless-service-" + strconv.Itoa(shardID), // TODO: evanzhao add an ordinal ID to this
+		"name": "scalog-data-headless-service",
 		"app":  "scalog-data",
 	}
 
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "scalog-data-headless-service-" + strconv.Itoa(shardID),
+			Name:      "scalog-data-headless-service",
 			Namespace: "scalog",
 			Labels:    labels,
 		},
@@ -336,28 +325,5 @@ func newDataStatefulSet(shardID string) *appsv1.StatefulSet {
 			},
 		},
 		Status: appsv1.StatefulSetStatus{},
-	}
-}
-
-// newPodForCR returns a busybox pod with the same name/namespace as the cr
-func newPodForCR(cr *scalogv1alpha1.ScalogService) *corev1.Pod {
-	labels := map[string]string{
-		"app": cr.Name,
-	}
-	return &corev1.Pod{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      cr.Name + "-pod",
-			Namespace: cr.Namespace,
-			Labels:    labels,
-		},
-		Spec: corev1.PodSpec{
-			Containers: []corev1.Container{
-				{
-					Name:    "busybox",
-					Image:   "busybox",
-					Command: []string{"sleep", "3600"},
-				},
-			},
-		},
 	}
 }
