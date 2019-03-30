@@ -5,7 +5,7 @@ metadata:
   namespace: scalog
 spec:
   # Add fields here
-  numShards: 3
+  numShards: 1
   numDataReplica: 2
   numMetadataReplica: 1
   

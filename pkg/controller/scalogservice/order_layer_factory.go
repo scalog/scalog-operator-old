@@ -14,7 +14,7 @@ import (
 func newOrderDeployment() *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "scalog-data-deployment",
+			Name:      "scalog-order-deployment",
 			Namespace: "scalog",
 			Labels: map[string]string{
 				"app": "scalog-order",
@@ -34,7 +34,7 @@ func newOrderDeployment() *appsv1.Deployment {
 					},
 				},
 				Spec: corev1.PodSpec{
-					ServiceAccountName: "scalog-order-service-account",
+					ServiceAccountName: "scalog-service-account",
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:            "scalog-order-node",

@@ -104,7 +104,7 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 
 	// Attach a service account if it does not yet exist
 	serviceAccount := corev1.ServiceAccount{}
-	err2 := r.client.Get(context.TODO(), types.NamespacedName{Namespace: "scalog", Name: "scalog-data-service-account"}, &serviceAccount)
+	err2 := r.client.Get(context.TODO(), types.NamespacedName{Namespace: "scalog", Name: "scalog-service-account"}, &serviceAccount)
 	if err2 != nil {
 		if errors.IsNotFound(err2) {
 			reqLogger.Info("Service Account resource not found. Creating...")
@@ -118,8 +118,44 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 		reqLogger.Info("Something went wrong with reading service account")
 	}
 
+	// Create a order service if it does not exist
+	orderService := corev1.Service{}
+	err = r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-order-service"}, &orderService)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			reqLogger.Info("Order service not found. Creating...")
+			service := newOrderService()
+			if err := r.client.Create(context.Background(), service); err != nil {
+				reqLogger.Info("Something went wrong while creating the order service")
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{Requeue: true}, nil
+		}
+		reqLogger.Info("Something went wrong while reading the order service")
+	}
+
+	// Create a order deployment if it doesn't exist
+	orderDeploy := appsv1.Deployment{}
+	err = r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-order-deployment"}, &orderDeploy)
+	if err != nil {
+		if errors.IsNotFound(err) {
+			reqLogger.Info("Order deployment not found. Creating...")
+			deploy := newOrderDeployment()
+			if err := r.client.Create(context.Background(), deploy); err != nil {
+				reqLogger.Info("Something went wrong while creating the order deployment")
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{Requeue: true}, nil
+		}
+		reqLogger.Info("Something went wrong while fetching the order deployment")
+		return reconcile.Result{}, err
+	}
+
+	// Reconcile the number of ordering layer nodes
+
+	// Create a data service to contain all of the data layer stateful set
 	dataService := corev1.Service{}
-	err = r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-data-headless-service"}, &dataService)
+	err = r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-data-service"}, &dataService)
 	if err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("Data Service not found. Creating...")
@@ -137,6 +173,7 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 	existingDataShards := &appsv1.StatefulSetList{}
 	dataShardSelector := client.ListOptions{}
 	dataShardSelector.SetLabelSelector(fmt.Sprintf("app=%s", "scalog-data"))
+	dataShardSelector.InNamespace("scalog")
 	err = r.client.List(context.TODO(), &dataShardSelector, existingDataShards)
 	if err == nil {
 		currSize := len(existingDataShards.Items)
