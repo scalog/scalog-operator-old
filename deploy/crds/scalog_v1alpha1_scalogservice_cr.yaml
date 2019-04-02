@@ -6,6 +6,6 @@ metadata:
 spec:
   # Add fields here
   numShards: 1
-  numDataReplica: 2
+  numDataReplica: 1
   numMetadataReplica: 1
   

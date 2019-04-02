@@ -25,17 +25,14 @@ func newServiceAccount() *corev1.ServiceAccount {
 	domain of statefulsets (data layer nodes).
 */
 func newDataService() *corev1.Service {
-	labels := map[string]string{
-		"name": "scalog-data-service",
-		"app":  "scalog-data",
-	}
-
 	return &corev1.Service{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      "scalog-data-service",
+			Name:      "scalog-headless-data-service",
 			Namespace: "scalog",
-			Labels:    labels,
+			Labels: map[string]string{
+				"role": "scalog-headless-data-service",
+			},
 		},
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
@@ -51,34 +48,69 @@ func newDataService() *corev1.Service {
 	}
 }
 
+func constructExternalDataServiceName(podName string) string {
+	return "scalog-exposed-data-service-" + podName
+}
+
+/*
+	newDataServerService launches a service that routes external traffic to a singular
+	pod.
+*/
+func newDataServerService(podName string) *corev1.Service {
+	return &corev1.Service{
+		TypeMeta: metav1.TypeMeta{},
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      constructExternalDataServiceName(podName),
+			Namespace: "scalog",
+			Labels: map[string]string{
+				"role":                "scalog-exposed-data-service",
+				"data-service-target": podName,
+			},
+		},
+		Spec: corev1.ServiceSpec{
+			Type:                  "LoadBalancer",
+			ExternalTrafficPolicy: "Local",
+			Ports: []corev1.ServicePort{
+				corev1.ServicePort{
+					Port:     21024,
+					Protocol: "TCP",
+				},
+			},
+			Selector: map[string]string{
+				"statefulset.kubernetes.io/pod-name": podName,
+			},
+		},
+	}
+}
+
 /*
 	newDataStatefulSet returns a StatefulSet. When created, the specified amount of
 	replicas will eventually be created and assigned a sticky identity. We treat
 	each statefulset as a "shard".
 */
-func newDataStatefulSet(shardID string) *appsv1.StatefulSet {
-	selector := metav1.LabelSelector{
-		MatchLabels: map[string]string{
-			"app": "scalog-data",
-		},
-	}
+func newDataStatefulSet(shardID string, numReplicas int32) *appsv1.StatefulSet {
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "scalog-data-shard-" + shardID,
 			Namespace: "scalog",
 			Labels: map[string]string{
-				"app": "scalog-data",
+				"role": "scalog-data-shard",
 			},
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas: createInt32(int32(2)),
-			Selector: &selector,
+			Replicas: &numReplicas,
+			Selector: &metav1.LabelSelector{
+				MatchLabels: map[string]string{
+					"tier": "scalog-data-shard-" + shardID,
+					"role": "scalog-data-replica",
+				},
+			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
 					Labels: map[string]string{
-						"app":  "scalog-data",
 						"tier": "scalog-data-shard-" + shardID,
+						"role": "scalog-data-replica",
 					},
 				},
 				Spec: corev1.PodSpec{

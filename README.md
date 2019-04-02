@@ -17,16 +17,16 @@ Inside of the scalog/scalog repository, bootstrap the namespace and manually pro
 ```kubectl create -f data/k8s/volumes.yaml```
 
 In the scalog-operator repository, register the custom resource with kubernetes...
-```kubectl create -f deploy/crds/scalog_v1alpha_scalogservice_crd.yaml```
+```kubectl create -f deploy/crds/scalog_v1alpha1_scalogservice_crd.yaml```
 
 Run the operator locally...
 ```operator-sdk up local --namespace=scalog```
 
 Create the scalogservice 
-```kubectl create -f deploy/crds/scalog_v1alpha_scalogservice_cr.yaml```
+```kubectl create -f deploy/crds/scalog_v1alpha1_scalogservice_cr.yaml```
 
 At this point, one shard with 2 replicas should have been spun up in your kubernetes cluster. You can scale up the number of shards by modifying 
-`scalog_v1alpha_scalogservice_cr.yaml` and then running `kubectl apply -f deploy/crds/scalog_v1alpha_scalogservice_cr.yaml`. 
+`scalog_v1alpha1_scalogservice_cr.yaml` and then running `kubectl apply -f deploy/crds/scalog_v1alpha1_scalogservice_cr.yaml`. 
 
 ##### In Cluster Deploy
 

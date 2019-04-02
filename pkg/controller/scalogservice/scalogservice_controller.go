@@ -3,6 +3,7 @@ package scalogservice
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"strconv"
 
 	scalogv1alpha1 "github.com/scalog/scalog-operator/pkg/apis/scalog/v1alpha1"
@@ -88,13 +89,12 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 
 	// Fetch the ScalogService instance
 	instance := &scalogv1alpha1.ScalogService{}
-	err := r.client.Get(context.TODO(), request.NamespacedName, instance)
-	if err != nil {
+	if err := r.client.Get(context.TODO(), request.NamespacedName, instance); err != nil {
 		if errors.IsNotFound(err) {
 			// Request object not found, could have been deleted after reconcile request.
 			// Owned objects are automatically garbage collected. For additional cleanup logic use finalizers.
 			// Return and don't requeue
-			reqLogger.Info("instance not found")
+			reqLogger.Info("scalog service instance not found")
 			return reconcile.Result{}, nil
 		}
 		reqLogger.Info("error getting the instance")
@@ -104,46 +104,47 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 
 	// Attach a service account if it does not yet exist
 	serviceAccount := corev1.ServiceAccount{}
-	err2 := r.client.Get(context.TODO(), types.NamespacedName{Namespace: "scalog", Name: "scalog-service-account"}, &serviceAccount)
-	if err2 != nil {
-		if errors.IsNotFound(err2) {
+	if err := r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-service-account"}, &serviceAccount); err != nil {
+		if errors.IsNotFound(err) {
 			reqLogger.Info("Service Account resource not found. Creating...")
 			sa := newServiceAccount()
-			if err := r.client.Create(context.TODO(), sa); err != nil {
+			if saErr := r.client.Create(context.Background(), sa); saErr != nil {
 				reqLogger.Info("Something went wrong while creating the service account")
-				return reconcile.Result{}, err
+				return reconcile.Result{}, saErr
 			}
+			// Successfully created the service account. requeue to serve further requests
 			return reconcile.Result{Requeue: true}, nil
 		}
 		reqLogger.Info("Something went wrong with reading service account")
+		return reconcile.Result{}, err
 	}
 
 	// Create a order service if it does not exist
 	orderService := corev1.Service{}
-	err = r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-order-service"}, &orderService)
-	if err != nil {
+	if err := r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-order-service"}, &orderService); err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("Order service not found. Creating...")
 			service := newOrderService()
-			if err := r.client.Create(context.Background(), service); err != nil {
+			if osErr := r.client.Create(context.Background(), service); osErr != nil {
 				reqLogger.Info("Something went wrong while creating the order service")
-				return reconcile.Result{}, err
+				return reconcile.Result{}, osErr
 			}
+			// Successfully created the order service. requeue to serve further requests
 			return reconcile.Result{Requeue: true}, nil
 		}
 		reqLogger.Info("Something went wrong while reading the order service")
+		return reconcile.Result{}, err
 	}
 
 	// Create a order deployment if it doesn't exist
-	orderDeploy := appsv1.Deployment{}
-	err = r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-order-deployment"}, &orderDeploy)
-	if err != nil {
+	orderDeploy := &appsv1.Deployment{}
+	if err := r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-order-deployment"}, orderDeploy); err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("Order deployment not found. Creating...")
-			deploy := newOrderDeployment()
-			if err := r.client.Create(context.Background(), deploy); err != nil {
+			deploy := newOrderDeployment(int32(instance.Spec.NumMetadataReplica))
+			if deployErr := r.client.Create(context.Background(), deploy); deployErr != nil {
 				reqLogger.Info("Something went wrong while creating the order deployment")
-				return reconcile.Result{}, err
+				return reconcile.Result{}, deployErr
 			}
 			return reconcile.Result{Requeue: true}, nil
 		}
@@ -152,30 +153,39 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 	}
 
 	// Reconcile the number of ordering layer nodes
+	orderReplicaSpecSize := int32(instance.Spec.NumMetadataReplica)
+	if *orderDeploy.Spec.Replicas != orderReplicaSpecSize {
+		orderDeploy.Spec.Replicas = &orderReplicaSpecSize
+		if err := r.client.Update(context.Background(), orderDeploy); err != nil {
+			reqLogger.Error(err, "Failed to update Deployment", "Deployment.Namespace", orderDeploy.Namespace, "Deployment.Name", orderDeploy.Name)
+			return reconcile.Result{}, err
+		}
+		// Spec updated - return and requeue
+		return reconcile.Result{Requeue: true}, nil
+	}
 
 	// Create a data service to contain all of the data layer stateful set
 	dataService := corev1.Service{}
-	err = r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-data-service"}, &dataService)
-	if err != nil {
+	if err := r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-headless-data-service"}, &dataService); err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("Data Service not found. Creating...")
 			service := newDataService()
-			if err := r.client.Create(context.Background(), service); err != nil {
+			if sErr := r.client.Create(context.Background(), service); sErr != nil {
 				reqLogger.Info("Something went wrong while creating the data service")
-				return reconcile.Result{}, err
+				return reconcile.Result{}, sErr
 			}
 			return reconcile.Result{Requeue: true}, nil
 		}
 		reqLogger.Info("Something went wrong with reading data service")
+		return reconcile.Result{}, err
 	}
 
 	// Reconcile the number of data shards
 	existingDataShards := &appsv1.StatefulSetList{}
 	dataShardSelector := client.ListOptions{}
-	dataShardSelector.SetLabelSelector(fmt.Sprintf("app=%s", "scalog-data"))
+	dataShardSelector.SetLabelSelector(fmt.Sprintf("role=scalog-data-shard"))
 	dataShardSelector.InNamespace("scalog")
-	err = r.client.List(context.TODO(), &dataShardSelector, existingDataShards)
-	if err == nil {
+	if err := r.client.List(context.Background(), &dataShardSelector, existingDataShards); err == nil {
 		currSize := len(existingDataShards.Items)
 		if instance.Spec.NumShards == currSize {
 			reqLogger.Info(fmt.Sprintf("god saw that there were %d shards running and it was good", currSize))
@@ -184,22 +194,76 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 
 			// Updating the latest shardID
 			instance.Status.LatestShardID++
-			if err := r.client.Update(context.TODO(), instance); err != nil {
-				reqLogger.Error(err, "Failed to update ScalogService status")
-				return reconcile.Result{}, err
+			if instanceErr := r.client.Update(context.Background(), instance); instanceErr != nil {
+				reqLogger.Error(err, "Failed to update ScalogService instance")
+				return reconcile.Result{}, instanceErr
 			}
 
 			// With the service now properly created, we can attempt to create a statefulset to live under that service
-			replicas := newDataStatefulSet(strconv.Itoa(instance.Status.LatestShardID))
-			if err := r.client.Create(context.TODO(), replicas); err != nil {
-				reqLogger.Error(err, fmt.Sprintf("Failed to create statefulset for shard %d", instance.Status.LatestShardID))
-				return reconcile.Result{}, err
+			shard := newDataStatefulSet(strconv.Itoa(instance.Status.LatestShardID), int32(instance.Spec.NumDataReplica))
+			if rErr := r.client.Create(context.Background(), shard); rErr != nil {
+				reqLogger.Info(fmt.Sprintf("Failed to create statefulset for shard %d", instance.Status.LatestShardID))
+				return reconcile.Result{}, rErr
 			}
+			// Successfully created shard
+			return reconcile.Result{Requeue: true}, nil
 		} else { // We have too many shards
 			// TODO: Randomly finalize one and then kill
 			reqLogger.Info(fmt.Sprintf("Too many shards. Current: %d. Desired: %d", currSize, instance.Spec.NumShards))
 		}
 	}
 
+	// Ensure that each data replica maintains its own service
+	existingDataReplicas := &corev1.PodList{}
+	externalDataReplicaSelector := client.ListOptions{}
+	externalDataReplicaSelector.SetLabelSelector("role=scalog-data-replica")
+	externalDataReplicaSelector.InNamespace("scalog")
+	if err := r.client.List(context.Background(), &externalDataReplicaSelector, existingDataReplicas); err == nil {
+		// Ensure that each data replica maintains its own service
+		externalDataService := &corev1.ServiceList{}
+		externalDataServiceSelector := client.ListOptions{}
+		externalDataServiceSelector.SetLabelSelector("role=scalog-exposed-data-service")
+		externalDataServiceSelector.InNamespace("scalog")
+		if dssErr := r.client.List(context.Background(), &externalDataServiceSelector, externalDataService); dssErr != nil {
+			return reconcile.Result{}, dssErr
+		}
+		// Convert existing services into an easy to query map
+		externalDataServiceMap := map[string]corev1.Service{}
+		for _, service := range externalDataService.Items {
+			externalDataServiceMap[service.Name] = service
+		}
+
+		for _, pod := range existingDataReplicas.Items {
+			// Automatically written by k8. We need to search for a corresponding service
+			serviceName := constructExternalDataServiceName(pod.Name)
+			if _, ok := externalDataServiceMap[serviceName]; !ok {
+				// We do not current have a service. We should create one
+				dss := newDataServerService(pod.Name)
+				if esErr := r.client.Create(context.Background(), dss); esErr != nil {
+					reqLogger.Info("Failed to create external service")
+					return reconcile.Result{}, esErr
+				}
+				return reconcile.Result{Requeue: true}, nil
+			}
+		}
+	} else {
+		// An error occured
+		reqLogger.Info("Failed to retrieve existing replicas")
+		return reconcile.Result{}, err
+	}
+
+	// Update Status
+	potentialUpdate := instance.Status.DeepCopy()
+	potentialUpdate.Phase = "Running"
+	potentialUpdate.NumShards = len(existingDataShards.Items)
+	potentialUpdate.NumMetadataReplica = int(*orderDeploy.Spec.Replicas)
+	if !reflect.DeepEqual(potentialUpdate, instance.Status) {
+		potentialUpdate.DeepCopyInto(&instance.Status)
+		err := r.client.Update(context.Background(), instance)
+		if err != nil {
+			reqLogger.Error(err, "Failed to update Scalog status")
+			return reconcile.Result{}, err
+		}
+	}
 	return reconcile.Result{}, nil
 }

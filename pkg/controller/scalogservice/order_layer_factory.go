@@ -11,7 +11,7 @@ import (
 	used for managing the replication of the ordering
 	layer
 */
-func newOrderDeployment() *appsv1.Deployment {
+func newOrderDeployment(numReplicas int32) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "scalog-order-deployment",
@@ -21,7 +21,7 @@ func newOrderDeployment() *appsv1.Deployment {
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: createInt32(2),
+			Replicas: &numReplicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app": "scalog-order",
