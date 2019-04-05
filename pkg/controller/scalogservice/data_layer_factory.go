@@ -97,7 +97,8 @@ func newDataStatefulSet(shardID string, numReplicas int32) *appsv1.StatefulSet {
 			Name:      "scalog-data-shard-" + shardID,
 			Namespace: "scalog",
 			Labels: map[string]string{
-				"role": "scalog-data-shard",
+				"role":   "scalog-data-shard",
+				"status": "normal",
 			},
 		},
 		Spec: appsv1.StatefulSetSpec{

@@ -13,7 +13,7 @@ import (
 	used for managing the replication of the ordering
 	layer
 */
-func newOrderDeployment(numReplicas int32) *appsv1.Deployment {
+func newOrderDeployment(numOrderReplicas int32, numDataReplicas int32) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "scalog-order-deployment",
@@ -23,7 +23,7 @@ func newOrderDeployment(numReplicas int32) *appsv1.Deployment {
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
-			Replicas: &numReplicas,
+			Replicas: &numOrderReplicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app": "scalog-order",
@@ -57,7 +57,11 @@ func newOrderDeployment(numReplicas int32) *appsv1.Deployment {
 								},
 								corev1.EnvVar{
 									Name:  "RAFT_CLUSTER_SIZE",
-									Value: strconv.Itoa(int(numReplicas)),
+									Value: strconv.Itoa(int(numOrderReplicas)),
+								},
+								corev1.EnvVar{
+									Name:  "REPLICA_COUNT",
+									Value: strconv.Itoa(int(numDataReplicas)),
 								},
 								corev1.EnvVar{
 									Name: "NAME",

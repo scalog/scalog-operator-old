@@ -1,6 +1,9 @@
 package scalogservice
 
-import "strings"
+import (
+	"strconv"
+	"strings"
+)
 
 /*
 	Obtains a pointer to an int64 object -- I have not figured out a way
@@ -23,4 +26,10 @@ func getIDFromShardName(podName string) string {
 	splitPodName := strings.Split(podName, "-")
 	shardID := splitPodName[len(splitPodName)-1]
 	return shardID
+}
+
+func getShardIDFromStatefulSetName(name string) (int32, error) {
+	splitPodName := strings.Split(name, "-")
+	shardID, err := strconv.ParseInt(splitPodName[len(splitPodName)-1], 10, 32)
+	return int32(shardID), err
 }

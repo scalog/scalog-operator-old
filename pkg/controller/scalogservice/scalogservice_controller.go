@@ -2,11 +2,15 @@ package scalogservice
 
 import (
 	"context"
+	goError "errors"
 	"fmt"
 	"reflect"
 	"strconv"
 
 	scalogv1alpha1 "github.com/scalog/scalog-operator/pkg/apis/scalog/v1alpha1"
+	"github.com/scalog/scalog/logger"
+	om "github.com/scalog/scalog/order/messaging"
+	"google.golang.org/grpc"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -141,7 +145,7 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 	if err := r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-order-deployment"}, orderDeploy); err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("Order deployment not found. Creating...")
-			deploy := newOrderDeployment(int32(instance.Spec.NumMetadataReplica))
+			deploy := newOrderDeployment(int32(instance.Spec.NumMetadataReplica), int32(instance.Spec.NumDataReplica))
 			if deployErr := r.client.Create(context.Background(), deploy); deployErr != nil {
 				reqLogger.Info("Something went wrong while creating the order deployment")
 				return reconcile.Result{}, deployErr
@@ -183,7 +187,7 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 	// Reconcile the number of data shards
 	existingDataShards := &appsv1.StatefulSetList{}
 	dataShardSelector := client.ListOptions{}
-	dataShardSelector.SetLabelSelector(fmt.Sprintf("role=scalog-data-shard"))
+	dataShardSelector.SetLabelSelector(fmt.Sprintf("role=scalog-data-shard,status=normal"))
 	dataShardSelector.InNamespace("scalog")
 	if err := r.client.List(context.Background(), &dataShardSelector, existingDataShards); err == nil {
 		currSize := len(existingDataShards.Items)
@@ -208,10 +212,49 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 			// Successfully created shard
 			return reconcile.Result{Requeue: true}, nil
 		} else { // We have too many shards
-			// TODO: Randomly finalize one and then kill
 			reqLogger.Info(fmt.Sprintf("Too many shards. Current: %d. Desired: %d", currSize, instance.Spec.NumShards))
+
+			// Randomly finalize a shard -- in this case we select the first available one.
+			if len(existingDataShards.Items) == 0 {
+				return reconcile.Result{}, goError.New("expected at least one shard to finalize. Found none")
+			}
+
+			shardToFinalize := existingDataShards.Items[0]
+			sid, err := getShardIDFromStatefulSetName(shardToFinalize.Name)
+			fmt.Println(fmt.Sprintf("name: %s, shard id: %d", shardToFinalize.Name, sid))
+			if err != nil {
+				panic(err)
+			}
+
+			// Creating a connection with the ordering layer
+			var opts []grpc.DialOption
+			opts = append(opts, grpc.WithInsecure())
+
+			logger.Printf("Utilizing DNS to dial Ordering Layer at scalog-order-service.scalog:21024")
+			conn, err := grpc.Dial("dns:///scalog-order-service.scalog:21024", opts...)
+			if err != nil {
+				panic(err)
+			}
+
+			orderClient := om.NewOrderClient(conn)
+			finalReq := &om.FinalizeRequest{ShardIDs: []int32{sid}}
+			// This procedure should only return when we have confirmed that Raft consensus has accepted our finalization request
+			if _, err := orderClient.Finalize(context.Background(), finalReq); err != nil {
+				logger.Printf("Failed to finalize shard")
+				return reconcile.Result{}, err
+			}
+
+			// Get the statefulset and modify the label on it so that we don't select it again when looking for shards
+			shardToFinalize.Labels["status"] = "finalized"
+			if err := r.client.Update(context.Background(), &shardToFinalize); err != nil {
+				reqLogger.Error(err, "Failed to update statefulset label")
+				return reconcile.Result{}, err
+			}
+			return reconcile.Result{Requeue: true}, nil
 		}
+
 	}
+	// TODO: Check all statefulsets to ensure that an expected number of pods is up and running. We finalize otherwise.
 
 	// Ensure that each data replica maintains its own service
 	existingDataReplicas := &corev1.PodList{}
