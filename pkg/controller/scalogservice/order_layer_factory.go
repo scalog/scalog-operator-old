@@ -38,8 +38,8 @@ func newOrderDeployment(numReplicas int32) *appsv1.Deployment {
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:            "scalog-order-node",
-							Image:           "scalog-order",
-							ImagePullPolicy: "Never",
+							Image:           "evantzhao/scalog:scalog-order",
+							ImagePullPolicy: "Always",
 							Ports: []corev1.ContainerPort{
 								corev1.ContainerPort{ContainerPort: 21024},
 								corev1.ContainerPort{ContainerPort: 1337},

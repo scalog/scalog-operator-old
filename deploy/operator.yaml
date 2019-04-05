@@ -17,14 +17,14 @@ spec:
       containers:
         - name: scalog-operator
           # Replace this with the built image name
-          image: ops
-          imagePullPolicy: Never
+          image: evantzhao/scalog:operator
+          # imagePullPolicy: Never
           ports:
           - containerPort: 60000
             name: metrics
           command:
           - scalog-operator
-          # imagePullPolicy: Always
+          imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
               valueFrom:

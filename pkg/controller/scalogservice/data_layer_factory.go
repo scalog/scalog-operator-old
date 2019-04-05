@@ -1,6 +1,8 @@
 package scalogservice
 
 import (
+	"strconv"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -68,7 +70,7 @@ func newDataServerService(podName string) *corev1.Service {
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Type:                  "LoadBalancer",
+			Type:                  "LoadBalancer", // Change this to Nodeport and specify an IP address to use
 			ExternalTrafficPolicy: "Local",
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
@@ -129,8 +131,8 @@ func newDataStatefulSet(shardID string, numReplicas int32) *appsv1.StatefulSet {
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:            "scalog-data-replica-" + shardID,
-							Image:           "scalog-data",
-							ImagePullPolicy: "Never",
+							Image:           "evantzhao/scalog:scalog-data",
+							ImagePullPolicy: "Always",
 							VolumeMounts: []corev1.VolumeMount{
 								corev1.VolumeMount{
 									Name:      "scalog-data-storage",
@@ -144,6 +146,10 @@ func newDataStatefulSet(shardID string, numReplicas int32) *appsv1.StatefulSet {
 								},
 							},
 							Env: []corev1.EnvVar{
+								corev1.EnvVar{
+									Name:  "REPLICA_COUNT",
+									Value: strconv.Itoa(int(numReplicas)),
+								},
 								corev1.EnvVar{
 									Name:  "GRPC_GO_LOG_VERBOSITY_LEVEL",
 									Value: "99",
