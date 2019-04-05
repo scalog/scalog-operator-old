@@ -44,7 +44,7 @@ func newOrderDeployment(numOrderReplicas int32, numDataReplicas int32) *appsv1.D
 							ImagePullPolicy: "Always",
 							Ports: []corev1.ContainerPort{
 								corev1.ContainerPort{ContainerPort: 21024},
-								corev1.ContainerPort{ContainerPort: 1337},
+								corev1.ContainerPort{ContainerPort: 10088},
 							},
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
