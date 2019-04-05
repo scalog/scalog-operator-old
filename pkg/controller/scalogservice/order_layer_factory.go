@@ -1,6 +1,8 @@
 package scalogservice
 
 import (
+	"strconv"
+
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -55,7 +57,7 @@ func newOrderDeployment(numReplicas int32) *appsv1.Deployment {
 								},
 								corev1.EnvVar{
 									Name:  "RAFT_CLUSTER_SIZE",
-									Value: "2",
+									Value: strconv.Itoa(int(numReplicas)),
 								},
 								corev1.EnvVar{
 									Name: "NAME",
@@ -125,6 +127,7 @@ func newOrderService() *corev1.Service {
 		Spec: corev1.ServiceSpec{
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
+					Name:     "grpclb",
 					Port:     21024,
 					Protocol: "TCP",
 				},
