@@ -22,6 +22,7 @@ func newDiscoveryService() *corev1.Service {
 			Labels:    labels,
 		},
 		Spec: corev1.ServiceSpec{
+			Type: "NodePort",
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
 					Port:     21024,
@@ -39,7 +40,7 @@ func newDiscoveryService() *corev1.Service {
 	newDiscoveryDeployment creates a Kubernetes Deployment used for managing
 	the replication of the discovery service
 */
-func newDiscoveryDeployment() *appsv1.Deployment {
+func newDiscoveryDeployment(numReplicas int32) *appsv1.Deployment {
 	return &appsv1.Deployment{
 		ObjectMeta: metav1.ObjectMeta{
 			Name:      "scalog-discovery-deployment",
@@ -49,8 +50,7 @@ func newDiscoveryDeployment() *appsv1.Deployment {
 			},
 		},
 		Spec: appsv1.DeploymentSpec{
-			// TODO: Read this from a configuration file
-			Replicas: createInt32(1),
+			Replicas: &numReplicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"app": "scalog-discovery",
@@ -67,8 +67,8 @@ func newDiscoveryDeployment() *appsv1.Deployment {
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:            "scalog-discovery-node",
-							Image:           "scalog-discovery",
-							ImagePullPolicy: "Never",
+							Image:           "evantzhao/scalog:discovery",
+							ImagePullPolicy: "Always",
 							Ports: []corev1.ContainerPort{
 								corev1.ContainerPort{ContainerPort: 21024},
 							},

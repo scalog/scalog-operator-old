@@ -295,6 +295,40 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 		return reconcile.Result{}, err
 	}
 
+	// Ensure that a discovery service is running
+	discoveryService := corev1.Service{}
+	if err := r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-discovery-service"}, &discoveryService); err != nil {
+		if errors.IsNotFound(err) {
+			reqLogger.Info("Discovery service not found. Creating...")
+			service := newDiscoveryService()
+			if osErr := r.client.Create(context.Background(), service); osErr != nil {
+				reqLogger.Info("Something went wrong while creating the discovery service")
+				return reconcile.Result{}, osErr
+			}
+			// Successfully created the order service. requeue to serve further requests
+			return reconcile.Result{Requeue: true}, nil
+		}
+		reqLogger.Info("Something went wrong while reading the discovery service")
+		return reconcile.Result{}, err
+	}
+
+	// Ensure that there is a discovery deployment running
+	discoveryDeploy := &appsv1.Deployment{}
+	if err := r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-discovery-deployment"}, discoveryDeploy); err != nil {
+		if errors.IsNotFound(err) {
+			reqLogger.Info("Discovery deployment not found. Creating...")
+			// TODO evantzhao don't hardcode this
+			deploy := newDiscoveryDeployment(1)
+			if deployErr := r.client.Create(context.Background(), deploy); deployErr != nil {
+				reqLogger.Info("Something went wrong while creating the discovery deployment")
+				return reconcile.Result{}, deployErr
+			}
+			return reconcile.Result{Requeue: true}, nil
+		}
+		reqLogger.Info("Something went wrong while fetching the discovery deployment")
+		return reconcile.Result{}, err
+	}
+
 	// Update Status
 	potentialUpdate := instance.Status.DeepCopy()
 	potentialUpdate.Phase = "Running"

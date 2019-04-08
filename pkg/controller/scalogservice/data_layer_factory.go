@@ -70,7 +70,7 @@ func newDataServerService(podName string) *corev1.Service {
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Type:                  "LoadBalancer", // Change this to Nodeport and specify an IP address to use
+			Type:                  "NodePort",
 			ExternalTrafficPolicy: "Local",
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
