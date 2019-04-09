@@ -1,0 +1,6 @@
+language: go
+go:
+  - 1.12.x
+  - 1.10.x
+before_install: cd cmd/manager
+script: go build
