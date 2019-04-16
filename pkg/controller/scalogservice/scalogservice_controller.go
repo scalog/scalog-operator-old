@@ -145,7 +145,7 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 	if err := r.client.Get(context.Background(), types.NamespacedName{Namespace: "scalog", Name: "scalog-order-deployment"}, orderDeploy); err != nil {
 		if errors.IsNotFound(err) {
 			reqLogger.Info("Order deployment not found. Creating...")
-			deploy := newOrderDeployment(int32(instance.Spec.NumMetadataReplica), int32(instance.Spec.NumDataReplica))
+			deploy := newOrderDeployment(instance.Spec.NumMetadataReplica, instance.Spec.NumDataReplica, instance.Spec.MillisecondBatchInterval)
 			if deployErr := r.client.Create(context.Background(), deploy); deployErr != nil {
 				reqLogger.Info("Something went wrong while creating the order deployment")
 				return reconcile.Result{}, deployErr
@@ -204,7 +204,7 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 			}
 
 			// With the service now properly created, we can attempt to create a statefulset to live under that service
-			shard := newDataStatefulSet(strconv.Itoa(instance.Status.LatestShardID), int32(instance.Spec.NumDataReplica))
+			shard := newDataStatefulSet(strconv.Itoa(instance.Status.LatestShardID), instance.Spec.NumDataReplica, instance.Spec.MillisecondBatchInterval)
 			if rErr := r.client.Create(context.Background(), shard); rErr != nil {
 				reqLogger.Info(fmt.Sprintf("Failed to create statefulset for shard %d", instance.Status.LatestShardID))
 				return reconcile.Result{}, rErr

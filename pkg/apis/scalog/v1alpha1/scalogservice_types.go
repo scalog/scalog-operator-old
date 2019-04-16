@@ -23,6 +23,8 @@ type ScalogServiceSpec struct {
 	NumDataReplica int `json:"numDataReplica"`
 	// NumMetadataReplica denotes the number of replicas in the ordering layer (Paxos/Raft/...).
 	NumMetadataReplica int `json:"numMetadataReplica"`
+	// MillisecondBatchInterval denotes the time intervals (in milliseconds) at which the data and order layer report to each other.
+	MillisecondBatchInterval int `json:"millisecondBatchInterval"`
 	// Repository is the name of the repository that hosts scalog containder images.
 	//
 	// By default, it is `hub.docker.com/scalog/scalog`.

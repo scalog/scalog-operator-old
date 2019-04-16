@@ -90,7 +90,8 @@ func newDataServerService(podName string) *corev1.Service {
 	replicas will eventually be created and assigned a sticky identity. We treat
 	each statefulset as a "shard".
 */
-func newDataStatefulSet(shardID string, numReplicas int32) *appsv1.StatefulSet {
+func newDataStatefulSet(shardID string, numReplicas int, batchInterval int) *appsv1.StatefulSet {
+	numReplicas32 := int32(numReplicas)
 	return &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{},
 		ObjectMeta: metav1.ObjectMeta{
@@ -102,7 +103,7 @@ func newDataStatefulSet(shardID string, numReplicas int32) *appsv1.StatefulSet {
 			},
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas: &numReplicas,
+			Replicas: &numReplicas32,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: map[string]string{
 					"tier": "scalog-data-shard-" + shardID,
@@ -148,8 +149,12 @@ func newDataStatefulSet(shardID string, numReplicas int32) *appsv1.StatefulSet {
 							},
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
+									Name:  "BATCH_INTERVAL",
+									Value: strconv.Itoa(batchInterval),
+								},
+								corev1.EnvVar{
 									Name:  "REPLICA_COUNT",
-									Value: strconv.Itoa(int(numReplicas)),
+									Value: strconv.Itoa(numReplicas),
 								},
 								corev1.EnvVar{
 									Name:  "GRPC_GO_LOG_VERBOSITY_LEVEL",
