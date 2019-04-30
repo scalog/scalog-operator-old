@@ -70,8 +70,7 @@ func newDataServerService(podName string) *corev1.Service {
 			},
 		},
 		Spec: corev1.ServiceSpec{
-			Type:                  "NodePort",
-			ExternalTrafficPolicy: "Local",
+			Type: "NodePort",
 			Ports: []corev1.ServicePort{
 				corev1.ServicePort{
 					Port:     21024,
