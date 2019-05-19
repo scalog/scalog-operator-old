@@ -132,7 +132,9 @@ func newDataStatefulSet(shardID string, numReplicas int, batchInterval int) *app
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:            "scalog-data-replica-" + shardID,
-							Image:           "evantzhao/scalog:scalog-data",
+							Image:           "scalog/scalog:latest",
+							Command:         []string{"./scalog"},
+							Args:            []string{"data"},
 							ImagePullPolicy: "Always",
 							VolumeMounts: []corev1.VolumeMount{
 								corev1.VolumeMount{

@@ -67,6 +67,15 @@ func add(mgr manager.Manager, r reconcile.Reconciler) error {
 		return err
 	}
 
+	// We want to be aware of pod changes and service changes
+	err = c.Watch(&source.Kind{Type: &corev1.Service{}}, &handler.EnqueueRequestForOwner{
+		IsController: true,
+		OwnerType:    &scalogv1alpha1.ScalogService{},
+	})
+	if err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -257,11 +266,12 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 	// TODO: Check all statefulsets to ensure that an expected number of pods is up and running. We finalize otherwise.
 
 	// Ensure that each data replica maintains its own service
-	existingDataReplicas := &corev1.PodList{}
+	existingDataReplicas := corev1.PodList{}
 	externalDataReplicaSelector := client.ListOptions{}
 	externalDataReplicaSelector.SetLabelSelector("role=scalog-data-replica")
 	externalDataReplicaSelector.InNamespace("scalog")
-	if err := r.client.List(context.Background(), &externalDataReplicaSelector, existingDataReplicas); err == nil {
+	err := r.client.List(context.Background(), &externalDataReplicaSelector, &existingDataReplicas)
+	if err == nil {
 		// Ensure that each data replica maintains its own service
 		externalDataService := &corev1.ServiceList{}
 		externalDataServiceSelector := client.ListOptions{}
@@ -270,10 +280,26 @@ func (r *ReconcileScalogService) Reconcile(request reconcile.Request) (reconcile
 		if dssErr := r.client.List(context.Background(), &externalDataServiceSelector, externalDataService); dssErr != nil {
 			return reconcile.Result{}, dssErr
 		}
+
+		// Convert existing pods into an easy to query map
+		dataReplicasMap := make(map[string]struct{})
+		for _, pod := range existingDataReplicas.Items {
+			linkedExternalServiceName := constructExternalDataServiceName(pod.Name)
+			dataReplicasMap[linkedExternalServiceName] = struct{}{}
+		}
+
 		// Convert existing services into an easy to query map
-		externalDataServiceMap := map[string]corev1.Service{}
+		externalDataServiceMap := make(map[string]corev1.Service)
 		for _, service := range externalDataService.Items {
 			externalDataServiceMap[service.Name] = service
+			// Check that the associated service has a pod. Since we create pods before services, any orphaned service
+			// indicates that the pod has died.
+			if _, ok := dataReplicasMap[service.Name]; !ok {
+				if delErr := r.client.Delete(context.Background(), &service); delErr != nil {
+					reqLogger.Info("Failed to delete external service")
+					return reconcile.Result{}, delErr
+				}
+			}
 		}
 
 		for _, pod := range existingDataReplicas.Items {

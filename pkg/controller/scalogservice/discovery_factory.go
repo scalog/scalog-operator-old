@@ -67,7 +67,9 @@ func newDiscoveryDeployment(numReplicas int32) *appsv1.Deployment {
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:            "scalog-discovery-node",
-							Image:           "evantzhao/scalog:discovery",
+							Image:           "scalog/scalog:latest",
+							Command:         []string{"./scalog"},
+							Args:            []string{"discovery"},
 							ImagePullPolicy: "Always",
 							Ports: []corev1.ContainerPort{
 								corev1.ContainerPort{ContainerPort: 21024},

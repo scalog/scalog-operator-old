@@ -41,7 +41,9 @@ func newOrderDeployment(numOrderReplicas int, numDataReplicas int, batchInterval
 					Containers: []corev1.Container{
 						corev1.Container{
 							Name:            "scalog-order-node",
-							Image:           "evantzhao/scalog:scalog-order",
+							Image:           "scalog/scalog:latest",
+							Command:         []string{"./scalog"},
+							Args:            []string{"order"},
 							ImagePullPolicy: "Always",
 							Ports: []corev1.ContainerPort{
 								corev1.ContainerPort{ContainerPort: 21024},
