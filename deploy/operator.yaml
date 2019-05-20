@@ -23,7 +23,7 @@ spec:
           - containerPort: 60000
             name: metrics
           command:
-          - scalog-operator
+          - "./scalog-operator"
           imagePullPolicy: Always
           env:
             - name: WATCH_NAMESPACE
