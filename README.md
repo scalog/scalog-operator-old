@@ -1,5 +1,7 @@
 # scalog-operator
 
+[![Build Status](https://travis-ci.org/scalog/scalog-operator.svg?branch=master)](https://travis-ci.org/scalog/scalog-operator)
+
 ### Running the operator
 
 There are two ways to run the Kubernetes operator, in cluster and locally. Running the operator locally is much faster than deploying it into the cluster when developing. 
