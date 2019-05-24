@@ -4,6 +4,7 @@ import (
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/util/intstr"
 )
 
 /*
@@ -73,6 +74,20 @@ func newDiscoveryDeployment(numReplicas int32) *appsv1.Deployment {
 							ImagePullPolicy: "Always",
 							Ports: []corev1.ContainerPort{
 								corev1.ContainerPort{ContainerPort: 21024},
+								corev1.ContainerPort{
+									Name:          "liveness-port",
+									ContainerPort: 9305,
+								},
+							},
+							LivenessProbe: &corev1.Probe{
+								Handler: corev1.Handler{
+									TCPSocket: &corev1.TCPSocketAction{
+										Port: intstr.FromString("liveness-port"),
+									},
+								},
+								PeriodSeconds:       20,
+								InitialDelaySeconds: 15,
+								FailureThreshold:    5,
 							},
 							Env: []corev1.EnvVar{
 								corev1.EnvVar{
